@@ -52,21 +52,6 @@ draws = 0
 
 realTime = True
 
-oBoard = []
-oChoices = []
-xBoard = []
-xChoices = []
-for sTurnNum in range(2):
-    oBoard.append([sTurnNum+1])
-    for turnNum in range(5):
-        oBoard[sTurnNum].append([turnNum+1])
-for sTurnNum in range(2):
-    xBoard.append([sTurnNum+1])
-    for turnNum in range(5):
-        xBoard[sTurnNum].append([turnNum+1])
-
-#print(str(xBoard) + " and " + str(oBoard))
-
 REWARD_WIN = 1
 REWARD_DRAW = 0.5
 REWARD_LOSE = -1
@@ -76,14 +61,29 @@ run_name = "%s" % int(time.time())
 
 exp_rate_initial = 1.0
 exp_rate_final = .01
-epochs = 5000
+epochs = 100
 currentEpoch = 1
 learning_rate = .001
 
 episode_max = 10000
 episode_stats = 100
 
-summary_dir = '/tmp/tensorflow/tictactoe'
+oBoard = []
+oChoices = []
+xBoard = []
+xChoices = []
+for sTurnNum in range(2):
+    oBoard.append([sTurnNum+1])
+    for gen in range(epochs):
+        oBoard[sTurnNum].append([gen+1])
+for sTurnNum in range(2):
+    xBoard.append([sTurnNum+1])
+    for gen in range(epochs):
+        xBoard[sTurnNum].append([gen+1])
+
+print(str(oBoard))
+
+summary_dir = '/tmp/machinelearning/tictactoe'
 
 pygame.init()
 pygame.font.init()
@@ -184,8 +184,26 @@ def unFlattenBoard(item):
         column = 2
         return Cell(row, column)
 
-def resetBoard():
-    global grid, mode, currentEpoch, oChoices, xChoices
+def updateChoices(winner):
+    global mode, currentEpoch, oChoices, xChoices, sTurn
+    if winner == "o":
+        oChoices.extend([1])
+        xChoices.extend([0])
+    elif winner == "x":
+        oChoices.extend([0])
+        xChoices.extend([1])
+    elif winner == "draw":
+        oChoices.extend([0.5])
+        xChoices.extend([0.5])
+    oBoard[sTurn-1][currentEpoch].append(oChoices)
+    xBoard[sTurn-1][currentEpoch].append(xChoices)
+    #print(oBoard[sTurn-1][currentEpoch])
+    oChoices = []
+    xChoices = []
+    currentEpoch+=1
+
+def resetBoard(winner):
+    global grid, mode, currentEpoch, oChoices, xChoices, sTurn
     del grid
     grid = []
     for row in range(3):
@@ -193,11 +211,11 @@ def resetBoard():
         for column in range(3):
             grid[row].append(0)
     if mode == Mode.PVB or mode == Mode.BVB:
-        currentEpoch+=1
-        print(currentEpoch)
-        oChoices = []
-        xChoices = []
+        updateChoices(winner)
 
+def determineBestCell():
+    global grid, mode, currentEpoch, oChoices, xChoices, sTurn
+    
 def randomlySelectCell(letter):
     board = []
     for row in range(3):
@@ -223,7 +241,7 @@ def selectCellSmart():
                 board = flattenBoard(board,row,column)
     #print(board)
     #Implement Choice based on past rewards and loses
-    choice = random.choice(board)
+    choice = determineBestCell()
     spot = unFlattenBoard(choice)
     return spot
 
@@ -336,7 +354,7 @@ while not crashed:
         sTurn = 2
         if realTime:
             pygame.time.delay(1000)
-        resetBoard()
+        resetBoard("x")
 
     elif(isWinner(grid, 2)):
         oWins+=1
@@ -344,7 +362,7 @@ while not crashed:
         sTurn = 1
         if realTime:
             pygame.time.delay(1000)
-        resetBoard()
+        resetBoard("o")
 
     elif(isDraw(grid)):
         draws+=1
@@ -352,7 +370,7 @@ while not crashed:
         sTurn = 1
         if realTime:
             pygame.time.delay(1000)
-        resetBoard()
+        resetBoard("draw")
 
     if turn == 2 and (mode == Mode.PVB or mode == Mode.BVB):
         if realTime:
