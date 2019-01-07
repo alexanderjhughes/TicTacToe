@@ -1,4 +1,4 @@
-import pygame, os, random, time
+import pygame, os, random, time, pickle
 import tensorflow as tf
 import numpy as np
 from enum import Enum
@@ -51,6 +51,8 @@ xWins = 0
 draws = 0
 
 realTime = True
+smartResult = False
+displayGame = True
 
 REWARD_WIN = 1
 REWARD_DRAW = 0.5
@@ -61,17 +63,23 @@ run_name = "%s" % int(time.time())
 
 exp_rate_initial = 1.0
 exp_rate_final = .01
-epochs = 100
+epochs = 5000
 currentEpoch = 1
 learning_rate = .001
 
 episode_max = 10000
 episode_stats = 100
 
-oBoard = []
+oBoard = pickle.load(open(os.path.join(dir, 'data/oBoard.pkl'), 'rb'))
+#oBoardTraining = pickle.load(open(os.path.join(dir, 'data/oBoardTraining.pkl'), 'rb'))
 oChoices = []
-xBoard = []
+xBoard = pickle.load(open(os.path.join(dir, 'data/xBoard.pkl'), 'rb'))
 xChoices = []
+#print(oBoardTraining[0][15])
+#Formatting data files
+'''
+oBoard = []
+xBoard = []
 for sTurnNum in range(2):
     oBoard.append([sTurnNum+1])
     for gen in range(epochs):
@@ -81,9 +89,9 @@ for sTurnNum in range(2):
     for gen in range(epochs):
         xBoard[sTurnNum].append([gen+1])
 
-print(str(oBoard))
-
-summary_dir = '/tmp/machinelearning/tictactoe'
+pickle.dump(oBoard, open(os.path.join(dir, 'data/oBoard.pkl'), 'wb'))
+pickle.dump(xBoard, open(os.path.join(dir, 'data/xBoard.pkl'), 'wb'))
+'''
 
 pygame.init()
 pygame.font.init()
@@ -99,6 +107,12 @@ xImg = pygame.image.load(xPath)
 font = pygame.font.SysFont('Comic Sans MS', 30)
 
 crashed = False
+
+def saveFiles():
+    pickle.dump(oBoard, open(os.path.join(dir, 'data/oBoardTraining.pkl'), 'wb'))
+    pickle.dump(xBoard, open(os.path.join(dir, 'data/xBoardTraining.pkl'), 'wb'))
+    #pickle.dump(oBoard, open(os.path.join(dir, 'data/oBoard.pkl'), 'wb'))
+    #pickle.dump(xBoard, open(os.path.join(dir, 'data/xBoard.pkl'), 'wb'))
 
 def isWinner(bo, x):
     return ((bo[0][0] == x and bo[0][1] == x and bo[0][2] == x) or
@@ -187,17 +201,17 @@ def unFlattenBoard(item):
 def updateChoices(winner):
     global mode, currentEpoch, oChoices, xChoices, sTurn
     if winner == "o":
-        oChoices.extend([1])
-        xChoices.extend([0])
+        oChoices.extend([REWARD_WIN])
+        xChoices.extend([REWARD_LOSE])
     elif winner == "x":
-        oChoices.extend([0])
-        xChoices.extend([1])
+        oChoices.extend([REWARD_LOSE])
+        xChoices.extend([REWARD_WIN])
     elif winner == "draw":
-        oChoices.extend([0.5])
-        xChoices.extend([0.5])
+        oChoices.extend([REWARD_DRAW])
+        xChoices.extend([REWARD_DRAW])
     oBoard[sTurn-1][currentEpoch].append(oChoices)
     xBoard[sTurn-1][currentEpoch].append(xChoices)
-    #print(oBoard[sTurn-1][currentEpoch])
+    print(oBoard[sTurn-1][currentEpoch][1])
     oChoices = []
     xChoices = []
     currentEpoch+=1
@@ -210,48 +224,60 @@ def resetBoard(winner):
         grid.append([])
         for column in range(3):
             grid[row].append(0)
+    print(currentEpoch)
     if mode == Mode.PVB or mode == Mode.BVB:
         updateChoices(winner)
 
-def determineBestCell():
-    global grid, mode, currentEpoch, oChoices, xChoices, sTurn
-    
-def randomlySelectCell(letter):
+def determineBestCell(boardResults, curEpoch, rewardBoard, move):
+    global oBoard
+    pastResults = []
+    for st in range(2):
+        for gen in range(curEpoch):
+            for x in range(9):
+                print(oBoard[st][gen])
+                if x+1 in boardResults and x+1 == rewardBoard[st][gen][1][move]:
+                    cell = x+1
+                    value = int(rewardBoard[st][gen][1][-1])
+                    pastResults.extend([cell, value])
+
+
+def randomlySelectCell(origBoard, letter):
+    global oChoices, xChoices
     board = []
     for row in range(3):
         for column in range(3):
-            if grid[row][column] == 0:
+            if origBoard[row][column] == 0:
                 board = flattenBoard(board,row,column)
     #print(board)
     choice = random.choice(board)
     if letter == "o":
         oChoices.append(choice)
-        print(oChoices)
     elif letter == "x":
         xChoices.append(choice)
-        print(xChoices)
     spot = unFlattenBoard(choice)
     return spot
 
-def selectCellSmart():
+def selectCellSmart(origBoard, rewardBoard, curEpoch, move):
     board = []
     for row in range(3):
         for column in range(3):
-            if grid[row][column] == 0:
+            if origBoard[row][column] == 0:
                 board = flattenBoard(board,row,column)
     #print(board)
     #Implement Choice based on past rewards and loses
-    choice = determineBestCell()
+    choice = determineBestCell(board, curEpoch, rewardBoard, move)
     spot = unFlattenBoard(choice)
     return spot
 
-def chooseMove(letter):
-    spot = randomlySelectCell(letter)
+#selectCellSmart(grid, oBoard, currentEpoch, len(oChoices))
+
+def chooseMove(board, letter):
+    spot = randomlySelectCell(board, letter)
     if letter == "o":
-        grid[spot.row][spot.column] = 2;
+        board[spot.row][spot.column] = 2;
         turn = 1
     if letter == "x":
-        grid[spot.row][spot.column] = 1;
+        board[spot.row][spot.column] = 1;
         turn = 2
 
 def trian():
@@ -287,7 +313,7 @@ class Bot1(object):
 '''
 
 def events(game):
-    global mode, turn, grid, crashed, realTime
+    global mode, turn, grid, crashed, realTime, displayGame
     ev = game.event.get()
     pos = game.mouse.get_pos()
     pressed1, pressed2, pressed3 = game.mouse.get_pressed()
@@ -299,18 +325,22 @@ def events(game):
                 print("Reset options!")
             if event.key == K_1:
                 mode = Mode.PVP
-                print("Mode changed to" + str(mode))
+                print("Mode changed to " + str(mode))
             if event.key == K_2:
                 mode = Mode.PVB
-                print("Mode changed to" + str(mode))
+                print("Mode changed to " + str(mode))
             if event.key == K_3:
                 mode = Mode.BVB
-                print("Mode changed to" + str(mode))
+                print("Mode changed to " + str(mode))
             if event.key == K_4:
                 realTime^=True
                 print("Real time switched!")
             if event.key == K_ESCAPE:
                 crashed = True
+            if event.key == K_5:
+                smartResult^=True
+            if event.key == K_6:
+                displayGame^=True
         if event.type == game.MOUSEBUTTONDOWN:
             column = pos[0] // (width+margin)
             row = pos[1] // (height+margin)
@@ -327,31 +357,34 @@ def events(game):
 
 while not crashed:
     events(pygame)
-    gameDisplay.fill(black)
+    if currentEpoch == epochs+1:
+        saveFiles()
+        crashed = True
+    if displayGame:
+        gameDisplay.fill(black)
+        for row in range(3):
+            for column in range(3):
+                if grid[row][column] == 0:
+                    pygame.draw.rect(gameDisplay, white, [(bar + width) * column + margin, (bar + height) * row + margin, width, height])
+                if grid[row][column] == 1:
+                    gameDisplay.blit(xImg, ((bar + width) * column + margin, (bar + height) * row + margin))
+                if grid[row][column] == 2:
+                    gameDisplay.blit(oImg, ((bar + width) * column + margin, (bar + height) * row + margin))
 
-    for row in range(3):
-        for column in range(3):
-            if grid[row][column] == 0:
-                pygame.draw.rect(gameDisplay, white, [(bar + width) * column + margin, (bar + height) * row + margin, width, height])
-            if grid[row][column] == 1:
-                gameDisplay.blit(xImg, ((bar + width) * column + margin, (bar + height) * row + margin))
-            if grid[row][column] == 2:
-                gameDisplay.blit(oImg, ((bar + width) * column + margin, (bar + height) * row + margin))
-
-    xSurface = font.render('X Wins: ' + str(xWins), False, green)
-    oSurface = font.render('O Wins: ' + str(oWins), False, green)
-    drawsSurface = font.render('Draws: ' + str(draws), False, green)
-    draws_rect = drawsSurface.get_rect(center=(tWidth/2, tHeight-30))
-    gameDisplay.blit(xSurface, (25,0))
-    gameDisplay.blit(oSurface, (tWidth-(len(str('O Wins: ' + str(oWins)))*10)-75,0))
-    gameDisplay.blit(drawsSurface, draws_rect)
-    pygame.display.update()
+        xSurface = font.render('X Wins: ' + str(xWins), False, green)
+        oSurface = font.render('O Wins: ' + str(oWins), False, green)
+        drawsSurface = font.render('Draws: ' + str(draws), False, green)
+        draws_rect = drawsSurface.get_rect(center=(tWidth/2, tHeight-30))
+        gameDisplay.blit(xSurface, (25,0))
+        gameDisplay.blit(oSurface, (tWidth-(len(str('O Wins: ' + str(oWins)))*10)-75,0))
+        gameDisplay.blit(drawsSurface, draws_rect)
+        pygame.display.update()
 
 
     if(isWinner(grid, 1)):
         xWins+=1
         turn = 2
-        sTurn = 2
+        sTurn = 1
         if realTime:
             pygame.time.delay(1000)
         resetBoard("x")
@@ -375,15 +408,19 @@ while not crashed:
     if turn == 2 and (mode == Mode.PVB or mode == Mode.BVB):
         if realTime:
             pygame.time.delay(1000)
-        chooseMove("o")
+        chooseMove(grid, "o")
+        #selectCellSmart(grid, oBoard, currentEpoch, len(oChoices))
         turn = 1
     elif turn == 1 and mode == Mode.BVB:
         if realTime:
             pygame.time.delay(1000)
-        chooseMove("x")
+        chooseMove(grid, "x")
+        #selectCellSmart(grid, oBoard, currentEpoch, len(oChoices))
         turn = 2
 
     clock.tick(60)
+
+#if crashed:
 
 pygame.quit()
 quit()
