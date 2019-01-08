@@ -71,11 +71,12 @@ episode_max = 10000
 episode_stats = 100
 
 oBoard = pickle.load(open(os.path.join(dir, 'data/oBoard.pkl'), 'rb'))
-#oBoardTraining = pickle.load(open(os.path.join(dir, 'data/oBoardTraining.pkl'), 'rb'))
+oBoardFinal = pickle.load(open(os.path.join(dir, 'data/oBoardFinal.pkl'), 'rb'))
 oChoices = []
 xBoard = pickle.load(open(os.path.join(dir, 'data/xBoard.pkl'), 'rb'))
+oBoardFinal = pickle.load(open(os.path.join(dir, 'data/oBoardFinal.pkl'), 'rb'))
 xChoices = []
-#print(oBoardTraining[0][15])
+print(oBoard[0])
 #Formatting data files
 '''
 oBoard = []
@@ -109,10 +110,8 @@ font = pygame.font.SysFont('Comic Sans MS', 30)
 crashed = False
 
 def saveFiles():
-    pickle.dump(oBoard, open(os.path.join(dir, 'data/oBoardTraining.pkl'), 'wb'))
-    pickle.dump(xBoard, open(os.path.join(dir, 'data/xBoardTraining.pkl'), 'wb'))
-    #pickle.dump(oBoard, open(os.path.join(dir, 'data/oBoard.pkl'), 'wb'))
-    #pickle.dump(xBoard, open(os.path.join(dir, 'data/xBoard.pkl'), 'wb'))
+    pickle.dump(oBoard, open(os.path.join(dir, 'data/oBoardSmart.pkl'), 'wb'))
+    pickle.dump(xBoard, open(os.path.join(dir, 'data/xBoardSmart.pkl'), 'wb'))
 
 def isWinner(bo, x):
     return ((bo[0][0] == x and bo[0][1] == x and bo[0][2] == x) or
@@ -252,8 +251,10 @@ def randomlySelectCell(origBoard, letter):
     choice = random.choice(board)
     if letter == "o":
         oChoices.append(choice)
+        xChoices.append(-(choice))
     elif letter == "x":
         xChoices.append(choice)
+        oChoices.append(-(choice))
     spot = unFlattenBoard(choice)
     return spot
 
@@ -357,7 +358,12 @@ def events(game):
 
 while not crashed:
     events(pygame)
-    if currentEpoch == epochs+1:
+    if currentEpoch == epochs+1 and sTurn==1:
+        currentEpoch=1
+        sTurn=2
+        turn=2
+        print("sTurn is now 2, next set of generations started!")
+    if currentEpoch == epochs+1 and sTurn==2:
         saveFiles()
         crashed = True
     if displayGame:
@@ -380,27 +386,26 @@ while not crashed:
         gameDisplay.blit(drawsSurface, draws_rect)
         pygame.display.update()
 
-
     if(isWinner(grid, 1)):
         xWins+=1
-        turn = 2
-        sTurn = 1
+        turn = sTurn
+        #sTurn = 1
         if realTime:
             pygame.time.delay(1000)
         resetBoard("x")
 
     elif(isWinner(grid, 2)):
         oWins+=1
-        turn = 1
-        sTurn = 1
+        turn = sTurn
+        #sTurn = 1
         if realTime:
             pygame.time.delay(1000)
         resetBoard("o")
 
     elif(isDraw(grid)):
         draws+=1
-        turn = 1
-        sTurn = 1
+        turn = sTurn
+        #sTurn = 1
         if realTime:
             pygame.time.delay(1000)
         resetBoard("draw")
